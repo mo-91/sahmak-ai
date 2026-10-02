@@ -1,150 +1,211 @@
 const http = require("http");
-require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const { URL } = require("url");
 
 const PORT = process.env.PORT || 8080;
-const API_KEY = process.env.ALPHA_VANTAGE_KEY;
 const PUBLIC = path.join(__dirname, "..", "public");
 
 function getJson(url) {
   return new Promise((resolve, reject) => {
-    https
-      .get(
-        url,
-        {
-          headers: {
-            "User-Agent": "SahmakAI/1.0",
-          },
+    const request = https.get(
+      url,
+      {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/154.0.0.0 Safari/537.36",
+          Accept: "application/json",
         },
-        (res) => {
-          let body = "";
+      },
+      (res) => {
+        let body = "";
 
-          res.on("data", (c) => {
-            body += c;
-          });
+        res.on("data", (chunk) => {
+          body += chunk;
+        });
 
-          res.on("end", () => {
-            try {
-              resolve(JSON.parse(body));
-            } catch {
-              reject(new Error("Invalid provider response"));
-            }
-          });
-        }
-      )
-      .on("error", reject);
+        res.on("end", () => {
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            reject(
+              new Error(
+                `مزود البيانات أعاد الخطأ ${res.statusCode}.`
+              )
+            );
+            return;
+          }
+
+          try {
+            resolve(JSON.parse(body));
+          } catch {
+            reject(
+              new Error("تعذر قراءة بيانات مزود الأسهم.")
+            );
+          }
+        });
+      }
+    );
+
+    request.on("error", reject);
+
+    request.setTimeout(15000, () => {
+      request.destroy();
+      reject(
+        new Error("انتهت مهلة الاتصال بمزود البيانات.")
+      );
+    });
   });
 }
 
-function sma(v, p) {
-  if (v.length < p) return null;
+function sma(values, period) {
+  if (values.length < period) {
+    return null;
+  }
 
-  const a = v.slice(-p);
+  const recent = values.slice(-period);
 
-  return a.reduce((x, y) => x + y, 0) / p;
+  return (
+    recent.reduce((sum, value) => sum + value, 0) /
+    period
+  );
 }
 
-function rsi(v, p = 14) {
-  if (v.length <= p) return 50;
+function rsi(values, period = 14) {
+  if (values.length <= period) {
+    return 50;
+  }
 
   let gains = 0;
   let losses = 0;
 
-  for (let i = v.length - p; i < v.length; i++) {
-    const d = v[i] - v[i - 1];
+  for (
+    let i = values.length - period;
+    i < values.length;
+    i++
+  ) {
+    const difference =
+      values[i] - values[i - 1];
 
-    if (d >= 0) {
-      gains += d;
+    if (difference >= 0) {
+      gains += difference;
     } else {
-      losses -= d;
+      losses -= difference;
     }
   }
 
-  if (losses === 0) return 100;
+  if (losses === 0) {
+    return 100;
+  }
 
-  const rs = (gains / p) / (losses / p);
+  const averageGain = gains / period;
+  const averageLoss = losses / period;
 
-  return 100 - 100 / (1 + rs);
+  const relativeStrength =
+    averageGain / averageLoss;
+
+  return (
+    100 -
+    100 / (1 + relativeStrength)
+  );
 }
 
 function analyze(closes) {
   const last = closes.at(-1);
-  const s20 = sma(closes, 20);
-  const s50 = sma(closes, 50);
-  const r = rsi(closes);
+
+  const sma20 = sma(closes, 20);
+  const sma50 = sma(closes, 50);
+  const currentRsi = rsi(closes);
 
   let score = 0;
+
   const reasons = [];
 
-  if (last > s20) {
+  // السعر مقابل SMA20
+  if (last > sma20) {
     score += 25;
+
     reasons.push(
       "السعر الحالي أعلى من متوسط 20 جلسة."
     );
   } else {
     score -= 25;
+
     reasons.push(
       "السعر الحالي أسفل متوسط 20 جلسة."
     );
   }
 
-  if (s20 > s50) {
+  // SMA20 مقابل SMA50
+  if (sma20 > sma50) {
     score += 25;
+
     reasons.push(
       "متوسط 20 جلسة أعلى من متوسط 50 جلسة."
     );
   } else {
     score -= 25;
+
     reasons.push(
       "متوسط 20 جلسة أسفل متوسط 50 جلسة."
     );
   }
 
-  if (r >= 55 && r <= 70) {
+  // RSI
+  if (
+    currentRsi >= 55 &&
+    currentRsi <= 70
+  ) {
     score += 20;
+
     reasons.push(
-      `RSI عند ${r.toFixed(
+      `RSI عند ${currentRsi.toFixed(
         1
-      )} ويدعم الزخم الإيجابي دون تشبع شراء شديد.`
+      )} ويدعم الزخم الإيجابي.`
     );
-  } else if (r <= 45 && r >= 30) {
+  } else if (
+    currentRsi <= 45 &&
+    currentRsi >= 30
+  ) {
     score -= 20;
+
     reasons.push(
-      `RSI عند ${r.toFixed(
+      `RSI عند ${currentRsi.toFixed(
         1
       )} ويشير إلى ضعف نسبي في الزخم.`
     );
-  } else if (r > 70) {
+  } else if (currentRsi > 70) {
     score += 5;
+
     reasons.push(
-      `RSI عند ${r.toFixed(
+      `RSI عند ${currentRsi.toFixed(
         1
-      )} مرتفع؛ تم تخفيف قوة إشارة الصعود.`
+      )} مرتفع، لذلك تم تخفيف قوة إشارة الصعود.`
     );
-  } else if (r < 30) {
+  } else if (currentRsi < 30) {
     score -= 5;
+
     reasons.push(
-      `RSI عند ${r.toFixed(
+      `RSI عند ${currentRsi.toFixed(
         1
-      )} منخفض؛ تم تخفيف قوة إشارة الهبوط.`
+      )} منخفض، لذلك تم تخفيف قوة إشارة الهبوط.`
     );
   } else {
     reasons.push(
-      `RSI عند ${r.toFixed(
+      `RSI عند ${currentRsi.toFixed(
         1
       )} ولا يعطي أفضلية قوية.`
     );
   }
 
-  const direction =
-    score > 12
-      ? "صعود"
-      : score < -12
-      ? "هبوط"
-      : "غير واضح";
+  let direction;
+
+  if (score > 12) {
+    direction = "صعود";
+  } else if (score < -12) {
+    direction = "هبوط";
+  } else {
+    direction = "غير واضح";
+  }
 
   const strength = Math.min(
     95,
@@ -159,69 +220,81 @@ function analyze(closes) {
 }
 
 async function predict(symbol) {
-  if (!API_KEY) {
-    throw new Error(
-      "الخادم غير مهيأ: أضف ALPHA_VANTAGE_KEY."
-    );
-  }
-
-  const u = new URL(
-    "https://www.alphavantage.co/query"
+  const yahooUrl = new URL(
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
+      symbol
+    )}`
   );
 
-  u.searchParams.set(
-    "function",
-    "TIME_SERIES_DAILY"
+  yahooUrl.searchParams.set(
+    "range",
+    "1y"
   );
 
-  u.searchParams.set("symbol", symbol);
-  u.searchParams.set("outputsize", "compact");
-  u.searchParams.set("apikey", API_KEY);
+  yahooUrl.searchParams.set(
+    "interval",
+    "1d"
+  );
 
-  const data = await getJson(u);
+  yahooUrl.searchParams.set(
+    "events",
+    "div,splits"
+  );
 
-  if (data["Error Message"]) {
+  const data = await getJson(
+    yahooUrl.toString()
+  );
+
+  if (
+    !data.chart ||
+    !data.chart.result ||
+    !data.chart.result[0]
+  ) {
     throw new Error(
-      "رمز السهم غير معروف."
+      "لم يتم العثور على بيانات لهذا السهم."
     );
   }
 
-  if (data["Note"]) {
+  const result =
+    data.chart.result[0];
+
+  const timestamps =
+    result.timestamp || [];
+
+  const quote =
+    result.indicators &&
+    result.indicators.quote &&
+    result.indicators.quote[0];
+
+  if (!quote || !quote.close) {
     throw new Error(
-      "تم تجاوز حد طلبات مزود البيانات. حاول لاحقاً."
+      "لم تصل بيانات أسعار كافية لهذا السهم."
     );
   }
 
-  if (data["Information"]) {
-    throw new Error(
-      data["Information"]
-    );
+  const closes = [];
+
+  const dates = [];
+
+  for (
+    let i = 0;
+    i < timestamps.length;
+    i++
+  ) {
+    const close = quote.close[i];
+
+    if (
+      Number.isFinite(close)
+    ) {
+      closes.push(Number(close));
+
+      dates.push(
+        new Date(
+          timestamps[i] * 1000
+        )
+      );
+    }
   }
-
-  const series =
-    data["Time Series (Daily)"];
-
-  if (!series) {
-    console.log(
-      "Alpha Vantage response:",
-      JSON.stringify(data)
-    );
-
-    throw new Error(
-      "مزود البيانات لم يرجع بيانات يومية لهذا السهم."
-    );
-  }
-
-  const dates =
-    Object.keys(series).sort();
-
-  const closes = dates
-    .map((d) =>
-      Number(
-        series[d]["4. close"]
-      )
-    )
-    .filter(Number.isFinite);
 
   if (closes.length < 55) {
     throw new Error(
@@ -229,55 +302,85 @@ async function predict(symbol) {
     );
   }
 
-  const a = analyze(closes);
+  const analysis =
+    analyze(closes);
 
-  const last = closes.at(-1);
-  const prev = closes.at(-2);
+  const last =
+    closes.at(-1);
+
+  const previous =
+    closes.at(-2);
+
+  const change =
+    ((last - previous) /
+      previous) *
+    100;
+
+  const lastDate =
+    dates.at(-1);
 
   return {
-    symbol,
-    name: symbol,
-    direction: a.direction,
-    strength: Number(
-      a.strength.toFixed(1)
-    ),
-    price: last,
-    change: Number(
-      (
-        ((last - prev) / prev) *
-        100
-      ).toFixed(2)
-    ),
-    reasons: a.reasons,
-    horizon: "الأيام القادمة",
-    dataDate: dates.at(-1),
+    symbol: symbol.toUpperCase(),
+
+    name:
+      result.meta &&
+      result.meta.longName
+        ? result.meta.longName
+        : symbol.toUpperCase(),
+
+    direction:
+      analysis.direction,
+
+    strength:
+      Number(
+        analysis.strength.toFixed(1)
+      ),
+
+    price:
+      Number(last.toFixed(2)),
+
+    change:
+      Number(change.toFixed(2)),
+
+    reasons:
+      analysis.reasons,
+
+    horizon:
+      "الأيام القادمة",
+
+    dataDate:
+      lastDate
+        .toISOString()
+        .slice(0, 10),
   };
 }
 
 function serveStatic(req, res) {
-  let p = new URL(
+  let pathname = new URL(
     req.url,
     `http://${req.headers.host}`
   ).pathname;
 
-  if (p === "/") {
-    p = "/index.html";
+  if (pathname === "/") {
+    pathname = "/index.html";
   }
 
-  if (p.includes("..")) {
+  if (pathname.includes("..")) {
     res.statusCode = 400;
-    return res.end("Bad request");
+    res.end("Bad request");
+    return;
   }
 
-  const file = path.join(
-    PUBLIC,
-    p
-  );
+  const filePath =
+    path.join(
+      PUBLIC,
+      pathname
+    );
 
   fs.readFile(
-    file,
-    (err, data) => {
-      if (err) {
+    filePath,
+    (error, data) => {
+      if (error) {
         if (!res.headersSent) {
           res.writeHead(404);
           res.end("Not found");
@@ -286,22 +389,41 @@ function serveStatic(req, res) {
         return;
       }
 
-      const ext =
-        path.extname(file);
+      const extension =
+        path.extname(filePath);
 
-      const types = {
+      const contentTypes = {
         ".html":
           "text/html; charset=utf-8",
+
         ".css":
           "text/css; charset=utf-8",
+
         ".js":
           "text/javascript; charset=utf-8",
+
+        ".png":
+          "image/png",
+
+        ".jpg":
+          "image/jpeg",
+
+        ".jpeg":
+          "image/jpeg",
+
+        ".svg":
+          "image/svg+xml",
+
+        ".ico":
+          "image/x-icon",
       };
 
       if (!res.headersSent) {
         res.writeHead(200, {
           "Content-Type":
-            types[ext] ||
+            contentTypes[
+              extension
+            ] ||
             "application/octet-stream",
         });
 
@@ -314,31 +436,36 @@ function serveStatic(req, res) {
 const server =
   http.createServer(
     async (req, res) => {
-      const u = new URL(
-        req.url,
-        `http://${req.headers.host}`
-      );
+      const url =
+        new URL(
+          req.url,
+          `http://${req.headers.host}`
+        );
 
+      // فحص السيرفر
       if (
-        u.pathname ===
+        url.pathname ===
         "/api/health"
       ) {
-        if (res.headersSent) return;
-
         res.writeHead(200, {
           "Content-Type":
             "application/json; charset=utf-8",
         });
 
-        return res.end(
+        res.end(
           JSON.stringify({
             ok: true,
+            provider:
+              "Yahoo Finance",
           })
         );
+
+        return;
       }
 
+      // توقع السهم
       if (
-        u.pathname ===
+        url.pathname ===
         "/api/predict"
       ) {
         res.setHeader(
@@ -347,56 +474,56 @@ const server =
         );
 
         try {
-          const symbol = (
-            u.searchParams.get(
-              "symbol"
-            ) || ""
-          )
-            .trim()
-            .toUpperCase();
+          const symbol =
+            (
+              url.searchParams.get(
+                "symbol"
+              ) || ""
+            )
+              .trim()
+              .toUpperCase();
 
           if (
-            !/^[A-Z0-9.-]{1,15}$/.test(
+            !/^[A-Z0-9.^=-]{1,20}$/.test(
               symbol
             )
           ) {
             throw new Error(
-              "اكتب رمز سهم صحيح مثل TSLA أو AAPL."
+              "اكتب رمز سهم صحيح مثل AAPL أو TSLA."
             );
           }
 
           const result =
             await predict(symbol);
 
-          if (res.headersSent)
-            return;
-
           res.statusCode = 200;
 
-          return res.end(
+          res.end(
             JSON.stringify(
               result
             )
           );
-        } catch (e) {
-          if (res.headersSent)
-            return;
+        } catch (error) {
+          console.error(
+            "Prediction error:",
+            error.message
+          );
 
           res.statusCode = 400;
 
-          return res.end(
+          res.end(
             JSON.stringify({
               error:
-                e &&
-                e.message
-                  ? e.message
-                  : "حدث خطأ غير معروف.",
+                error.message ||
+                "حدث خطأ غير معروف.",
             })
           );
         }
+
+        return;
       }
 
-      return serveStatic(
+      serveStatic(
         req,
         res
       );
