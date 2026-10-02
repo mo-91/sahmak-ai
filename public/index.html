@@ -82,7 +82,51 @@
     <div class="strength" id="strength">-</div>
     <div class="muted" style="text-align:center;margin-top:8px" id="change">-</div>
   </section>
+  <section class="card" id="indicatorsCard" hidden>
+    <h2 style="margin-top:0">📊 المؤشرات الفنية</h2>
 
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+      <div style="background:#f5f7fb;border-radius:14px;padding:14px">
+        <div class="muted">SMA 20</div>
+        <strong id="sma20">-</strong>
+      </div>
+
+      <div style="background:#f5f7fb;border-radius:14px;padding:14px">
+        <div class="muted">SMA 50</div>
+        <strong id="sma50">-</strong>
+      </div>
+
+      <div style="background:#f5f7fb;border-radius:14px;padding:14px">
+        <div class="muted">SMA 200</div>
+        <strong id="sma200">-</strong>
+      </div>
+
+      <div style="background:#f5f7fb;border-radius:14px;padding:14px">
+        <div class="muted">RSI</div>
+        <strong id="rsi">-</strong>
+      </div>
+
+      <div style="background:#f5f7fb;border-radius:14px;padding:14px">
+        <div class="muted">MACD</div>
+        <strong id="macd">-</strong>
+      </div>
+
+      <div style="background:#f5f7fb;border-radius:14px;padding:14px">
+        <div class="muted">MACD Signal</div>
+        <strong id="macdSignal">-</strong>
+      </div>
+
+      <div style="background:#f5f7fb;border-radius:14px;padding:14px">
+        <div class="muted">حجم التداول</div>
+        <strong id="volume">-</strong>
+      </div>
+
+      <div style="background:#f5f7fb;border-radius:14px;padding:14px">
+        <div class="muted">متوسط حجم التداول</div>
+        <strong id="averageVolume">-</strong>
+      </div>
+    </div>
+  </section>
   <section class="card" id="reasonsCard" hidden>
     <h2 style="margin-top:0">لماذا ظهرت هذه الإشارة؟</h2>
     <ul class="reasons" id="reasons"></ul>
@@ -131,6 +175,38 @@ async function run(symbol){
     document.getElementById('strength').textContent='قوة الإشارة: '+strength.toFixed(0)+'%';
     const ch=Number(data.change)||0;
     document.getElementById('change').textContent='تغير آخر جلسة: '+(ch>=0?'+':'')+ch.toFixed(2)+'%';
+const indicatorsCard = document.getElementById('indicatorsCard');
+const indicators = data.indicators || {};
+
+document.getElementById('sma20').textContent =
+  indicators.sma20 ?? '-';
+
+document.getElementById('sma50').textContent =
+  indicators.sma50 ?? '-';
+
+document.getElementById('sma200').textContent =
+  indicators.sma200 ?? '-';
+
+document.getElementById('rsi').textContent =
+  indicators.rsi ?? '-';
+
+document.getElementById('macd').textContent =
+  indicators.macd ?? '-';
+
+document.getElementById('macdSignal').textContent =
+  indicators.macdSignal ?? '-';
+
+document.getElementById('volume').textContent =
+  indicators.volume
+    ? Number(indicators.volume).toLocaleString()
+    : '-';
+
+document.getElementById('averageVolume').textContent =
+  indicators.averageVolume
+    ? Number(indicators.averageVolume).toLocaleString()
+    : '-';
+
+indicatorsCard.hidden = false;
     const list=document.getElementById('reasons');
     list.innerHTML='';
     (data.reasons||[]).forEach(x=>{
