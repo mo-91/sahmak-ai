@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#202a63">
+  <meta name="description" content="سهمك AI - تحليل اتجاه الأسهم بشكل احتمالي باستخدام البيانات والمؤشرات الفنية.">
+  <title>سهمك AI</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;background:#f5f7fb;color:#172033;font-family:Arial,"Tahoma",sans-serif}
+    .wrap{max-width:980px;margin:auto;padding:28px 18px 50px}
+    .hero{background:linear-gradient(135deg,#202a63,#5365d6);color:#fff;border-radius:28px;padding:34px;box-shadow:0 18px 45px #202a6320}
+    .brand{font-size:38px;font-weight:900;margin:5px 0 10px}
+    .hero p{margin:0;line-height:1.8;max-width:680px;color:#eef0ff}
+    .search{background:#fff;border-radius:22px;padding:16px;display:flex;gap:10px;margin-top:20px;box-shadow:0 12px 35px #17203312}
+    input{flex:1;min-width:0;border:1px solid #e1e5ee;border-radius:15px;padding:15px 16px;font-size:17px;outline:none;text-transform:uppercase}
+    input:focus{border-color:#5365d6;box-shadow:0 0 0 3px #5365d622}
+    button{border:0;border-radius:15px;padding:0 24px;background:#5365d6;color:white;font-size:16px;font-weight:800;cursor:pointer;min-height:52px}
+    button:disabled{opacity:.55;cursor:not-allowed}
+    .examples{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .chip{background:#eef0ff;color:#27327a;border:0;border-radius:999px;padding:8px 13px;cursor:pointer}
+    .card{background:#fff;border-radius:22px;padding:22px;margin-top:18px;box-shadow:0 10px 30px #1720330c}
+    .resultHead{display:flex;align-items:center;gap:14px}
+    .symbol{font-size:25px;font-weight:900}
+    .muted{color:#697386}
+    .price{margin-right:auto;font-size:22px;font-weight:900}
+    .direction{text-align:center;margin:25px 0 18px;font-size:34px;font-weight:900}
+    .bar{height:13px;background:#e9ecf3;border-radius:20px;overflow:hidden}
+    .bar span{display:block;height:100%;background:#5365d6;border-radius:20px;transition:width .5s}
+    .strength{text-align:center;margin-top:9px;font-weight:800}
+    .reasons{margin:0;padding:0;list-style:none}
+    .reasons li{padding:10px 0;border-bottom:1px solid #edf0f5;line-height:1.6}
+    .reasons li:last-child{border-bottom:0}
+    .notice{background:#fff7df;border:1px solid #f1df9e;border-radius:16px;padding:14px;line-height:1.7;color:#5f4c17}
+    .error{background:#fff0f0;border:1px solid #f2c7c7;color:#8d2c2c}
+    .loading{display:none;text-align:center;padding:25px}
+    footer{text-align:center;color:#7a8495;font-size:12px;line-height:1.7;margin-top:20px}
+    @media(max-width:650px){
+      .wrap{padding:15px 12px 35px}
+      .hero{padding:24px;border-radius:22px}
+      .brand{font-size:31px}
+      .search{flex-direction:column}
+      button{width:100%}
+      .price{margin-right:0;margin-left:auto}
+      .direction{font-size:27px}
+    }
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <section class="hero">
+    <div class="muted" style="color:#cdd3ff">تحليل احتمالي للأسهم</div>
+    <div class="brand">سهمك AI</div>
+    <p>اكتب رمز السهم، وسيحلل النظام البيانات التاريخية والمؤشرات الفنية لإعطائك إشارة اتجاهية للأيام القادمة.</p>
+
+    <form class="search" id="form">
+      <input id="symbol" autocomplete="off" maxlength="15" placeholder="مثال: AAPL أو NVDA" aria-label="رمز السهم">
+      <button id="analyze" type="submit">حلّل السهم</button>
+    </form>
+    <div class="examples">
+      <button class="chip" type="button" data-symbol="AAPL">AAPL</button>
+      <button class="chip" type="button" data-symbol="NVDA">NVDA</button>
+      <button class="chip" type="button" data-symbol="MSFT">MSFT</button>
+      <button class="chip" type="button" data-symbol="TSLA">TSLA</button>
+    </div>
+  </section>
+
+  <div class="loading card" id="loading">⏳ جاري تحليل البيانات...</div>
+  <div class="card error" id="error" hidden></div>
+
+  <section class="card" id="result" hidden>
+    <div class="resultHead">
+      <div>
+        <div class="symbol" id="name">-</div>
+        <div class="muted" id="meta">-</div>
+      </div>
+      <div class="price" id="price">-</div>
+    </div>
+    <div class="direction" id="direction">-</div>
+    <div class="bar"><span id="bar"></span></div>
+    <div class="strength" id="strength">-</div>
+    <div class="muted" style="text-align:center;margin-top:8px" id="change">-</div>
+  </section>
+
+  <section class="card" id="reasonsCard" hidden>
+    <h2 style="margin-top:0">لماذا ظهرت هذه الإشارة؟</h2>
+    <ul class="reasons" id="reasons"></ul>
+    <div class="muted" style="font-size:12px;margin-top:10px" id="date"></div>
+  </section>
+
+  <div class="notice" style="margin-top:18px">
+    <strong>تنبيه:</strong> قوة الإشارة ليست احتمالًا مضمونًا للربح ولا تمثل نصيحة استثمارية.
+    الأسواق قد تتحرك عكس أي توقع، ولا توجد خوارزمية تضمن نتيجة مستقبلية.
+  </div>
+
+  <footer>
+    سهمك AI — نسخة ويب تجريبية/تحليلية. قبل النشر التجاري يجب اختبار النموذج تاريخيًا
+    وإظهار منهجية الدقة وفترة الاختبار، والتأكد من حقوق استخدام بيانات السوق.
+  </footer>
+</main>
+
+<script>
+const form=document.getElementById('form');
+const input=document.getElementById('symbol');
+const analyze=document.getElementById('analyze');
+const loading=document.getElementById('loading');
+const errorBox=document.getElementById('error');
+const result=document.getElementById('result');
+const reasonsCard=document.getElementById('reasonsCard');
+
+async function run(symbol){
+  symbol=(symbol||'').trim().toUpperCase();
+  if(!/^[A-Z0-9.-]{1,15}$/.test(symbol)){
+    showError('اكتب رمز سهم صحيح، مثل AAPL أو NVDA.');
+    return;
+  }
+  input.value=symbol;
+  errorBox.hidden=true; result.hidden=true; reasonsCard.hidden=true;
+  loading.style.display='block'; analyze.disabled=true;
+  try{
+    const r=await fetch('/api/predict?symbol='+encodeURIComponent(symbol));
+    const data=await r.json();
+    if(!r.ok || data.error) throw new Error(data.error||'تعذر الحصول على البيانات.');
+    document.getElementById('name').textContent=data.name||data.symbol;
+    document.getElementById('meta').textContent=(data.symbol||symbol)+' • '+(data.horizon||'الأيام القادمة');
+    document.getElementById('price').textContent='$'+Number(data.price).toFixed(2);
+    document.getElementById('direction').textContent=data.direction==='صعود'?'📈 صعود':data.direction==='هبوط'?'📉 هبوط':'⏸ غير واضح';
+    const strength=Math.max(0,Math.min(100,Number(data.strength)||0));
+    document.getElementById('bar').style.width=strength+'%';
+    document.getElementById('strength').textContent='قوة الإشارة: '+strength.toFixed(0)+'%';
+    const ch=Number(data.change)||0;
+    document.getElementById('change').textContent='تغير آخر جلسة: '+(ch>=0?'+':'')+ch.toFixed(2)+'%';
+    const list=document.getElementById('reasons');
+    list.innerHTML='';
+    (data.reasons||[]).forEach(x=>{
+      const li=document.createElement('li');
+      li.textContent='✓ '+x;
+      list.appendChild(li);
+    });
+    document.getElementById('date').textContent=data.dataDate?'آخر بيانات مستخدمة: '+data.dataDate:'';
+    result.hidden=false; reasonsCard.hidden=false;
+  }catch(e){ showError(e.message||'حدث خطأ غير متوقع.'); }
+  finally{loading.style.display='none'; analyze.disabled=false;}
+}
+function showError(msg){errorBox.textContent=msg;errorBox.hidden=false;}
+form.addEventListener('submit',e=>{e.preventDefault();run(input.value)});
+document.querySelectorAll('[data-symbol]').forEach(b=>b.addEventListener('click',()=>run(b.dataset.symbol)));
+</script>
+</body>
+</html>

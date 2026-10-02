@@ -1,0 +1,14 @@
+{
+  "name": "sahmak-ai-web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.5"
+  }
+}
