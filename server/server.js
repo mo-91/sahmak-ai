@@ -1,6 +1,7 @@
 const http = require("http");
 require("dotenv").config();
-const fs = require("fs");const path = require("path");
+const fs = require("fs");
+const path = require("path");
 const https = require("https");
 const { URL } = require("url");
 
@@ -13,7 +14,11 @@ function getJson(url) {
     https
       .get(
         url,
-        { headers: { "User-Agent": "SahmakAI/1.0" } },
+        {
+          headers: {
+            "User-Agent": "SahmakAI/1.0",
+          },
+        },
         (res) => {
           let body = "";
 
@@ -76,43 +81,61 @@ function analyze(closes) {
 
   if (last > s20) {
     score += 25;
-    reasons.push("السعر الحالي أعلى من متوسط 20 جلسة.");
+    reasons.push(
+      "السعر الحالي أعلى من متوسط 20 جلسة."
+    );
   } else {
     score -= 25;
-    reasons.push("السعر الحالي أسفل متوسط 20 جلسة.");
+    reasons.push(
+      "السعر الحالي أسفل متوسط 20 جلسة."
+    );
   }
 
   if (s20 > s50) {
     score += 25;
-    reasons.push("متوسط 20 جلسة أعلى من متوسط 50 جلسة.");
+    reasons.push(
+      "متوسط 20 جلسة أعلى من متوسط 50 جلسة."
+    );
   } else {
     score -= 25;
-    reasons.push("متوسط 20 جلسة أسفل متوسط 50 جلسة.");
+    reasons.push(
+      "متوسط 20 جلسة أسفل متوسط 50 جلسة."
+    );
   }
 
   if (r >= 55 && r <= 70) {
     score += 20;
     reasons.push(
-      `RSI عند ${r.toFixed(1)} ويدعم الزخم الإيجابي دون تشبع شراء شديد.`
+      `RSI عند ${r.toFixed(
+        1
+      )} ويدعم الزخم الإيجابي دون تشبع شراء شديد.`
     );
   } else if (r <= 45 && r >= 30) {
     score -= 20;
     reasons.push(
-      `RSI عند ${r.toFixed(1)} ويشير إلى ضعف نسبي في الزخم.`
+      `RSI عند ${r.toFixed(
+        1
+      )} ويشير إلى ضعف نسبي في الزخم.`
     );
   } else if (r > 70) {
     score += 5;
     reasons.push(
-      `RSI عند ${r.toFixed(1)} مرتفع؛ تم تخفيف قوة إشارة الصعود.`
+      `RSI عند ${r.toFixed(
+        1
+      )} مرتفع؛ تم تخفيف قوة إشارة الصعود.`
     );
   } else if (r < 30) {
     score -= 5;
     reasons.push(
-      `RSI عند ${r.toFixed(1)} منخفض؛ تم تخفيف قوة إشارة الهبوط.`
+      `RSI عند ${r.toFixed(
+        1
+      )} منخفض؛ تم تخفيف قوة إشارة الهبوط.`
     );
   } else {
     reasons.push(
-      `RSI عند ${r.toFixed(1)} ولا يعطي أفضلية قوية.`
+      `RSI عند ${r.toFixed(
+        1
+      )} ولا يعطي أفضلية قوية.`
     );
   }
 
@@ -158,7 +181,9 @@ async function predict(symbol) {
   const data = await getJson(u);
 
   if (data["Error Message"]) {
-    throw new Error("رمز السهم غير معروف.");
+    throw new Error(
+      "رمز السهم غير معروف."
+    );
   }
 
   if (data["Note"]) {
@@ -167,23 +192,40 @@ async function predict(symbol) {
     );
   }
 
-  const series = data["Time Series (Daily)"];
-
-  if (!series) {
+  if (data["Information"]) {
     throw new Error(
-      "لم تصل بيانات كافية لهذا السهم."
+      data["Information"]
     );
   }
 
-  const dates = Object.keys(series).sort();
+  const series =
+    data["Time Series (Daily)"];
+
+  if (!series) {
+    console.log(
+      "Alpha Vantage response:",
+      JSON.stringify(data)
+    );
+
+    throw new Error(
+      "مزود البيانات لم يرجع بيانات يومية لهذا السهم."
+    );
+  }
+
+  const dates =
+    Object.keys(series).sort();
 
   const closes = dates
-    .map((d) => Number(series[d]["4. close"]))
+    .map((d) =>
+      Number(
+        series[d]["4. close"]
+      )
+    )
     .filter(Number.isFinite);
 
   if (closes.length < 55) {
     throw new Error(
-      "لا توجد بيانات تاريخية كافية للتحليل."
+      `وصلت بيانات ${closes.length} جلسة فقط، ولا توجد بيانات تاريخية كافية للتحليل.`
     );
   }
 
@@ -196,10 +238,15 @@ async function predict(symbol) {
     symbol,
     name: symbol,
     direction: a.direction,
-    strength: Number(a.strength.toFixed(1)),
+    strength: Number(
+      a.strength.toFixed(1)
+    ),
     price: last,
     change: Number(
-      (((last - prev) / prev) * 100).toFixed(2)
+      (
+        ((last - prev) / prev) *
+        100
+      ).toFixed(2)
     ),
     reasons: a.reasons,
     horizon: "الأيام القادمة",
@@ -222,112 +269,145 @@ function serveStatic(req, res) {
     return res.end("Bad request");
   }
 
-  const file = path.join(PUBLIC, p);
+  const file = path.join(
+    PUBLIC,
+    p
+  );
 
-  fs.readFile(file, (err, data) => {
-    if (err) {
-      if (!res.headersSent) {
-        res.writeHead(404);
-        res.end("Not found");
-      }
-
-      return;
-    }
-
-    const ext = path.extname(file);
-
-    const types = {
-      ".html": "text/html; charset=utf-8",
-      ".css": "text/css; charset=utf-8",
-      ".js": "text/javascript; charset=utf-8",
-    };
-
-    if (!res.headersSent) {
-      res.writeHead(200, {
-        "Content-Type":
-          types[ext] ||
-          "application/octet-stream",
-      });
-
-      res.end(data);
-    }
-  });
-}
-
-const server = http.createServer(
-  async (req, res) => {
-    const u = new URL(
-      req.url,
-      `http://${req.headers.host}`
-    );
-
-    if (u.pathname === "/api/health") {
-      if (res.headersSent) return;
-
-      res.writeHead(200, {
-        "Content-Type":
-          "application/json; charset=utf-8",
-      });
-
-      return res.end(
-        JSON.stringify({ ok: true })
-      );
-    }
-
-    if (u.pathname === "/api/predict") {
-      res.setHeader(
-        "Content-Type",
-        "application/json; charset=utf-8"
-      );
-
-      try {
-        const symbol = (
-          u.searchParams.get("symbol") || ""
-        )
-          .trim()
-          .toUpperCase();
-
-        if (
-          !/^[A-Z0-9.-]{1,15}$/.test(symbol)
-        ) {
-          throw new Error(
-            "اكتب رمز سهم صحيح مثل TSLA أو AAPL."
-          );
+  fs.readFile(
+    file,
+    (err, data) => {
+      if (err) {
+        if (!res.headersSent) {
+          res.writeHead(404);
+          res.end("Not found");
         }
 
-        const result = await predict(symbol);
+        return;
+      }
 
-        // تأكد أن الرد لم يُرسل مسبقًا
+      const ext =
+        path.extname(file);
+
+      const types = {
+        ".html":
+          "text/html; charset=utf-8",
+        ".css":
+          "text/css; charset=utf-8",
+        ".js":
+          "text/javascript; charset=utf-8",
+      };
+
+      if (!res.headersSent) {
+        res.writeHead(200, {
+          "Content-Type":
+            types[ext] ||
+            "application/octet-stream",
+        });
+
+        res.end(data);
+      }
+    }
+  );
+}
+
+const server =
+  http.createServer(
+    async (req, res) => {
+      const u = new URL(
+        req.url,
+        `http://${req.headers.host}`
+      );
+
+      if (
+        u.pathname ===
+        "/api/health"
+      ) {
         if (res.headersSent) return;
 
-        res.statusCode = 200;
-
-        return res.end(
-          JSON.stringify(result)
-        );
-      } catch (e) {
-        // أهم إصلاح للمشكلة
-        if (res.headersSent) return;
-
-        res.statusCode = 400;
+        res.writeHead(200, {
+          "Content-Type":
+            "application/json; charset=utf-8",
+        });
 
         return res.end(
           JSON.stringify({
-            error:
-              e && e.message
-                ? e.message
-                : "حدث خطأ غير معروف.",
+            ok: true,
           })
         );
       }
-    }
 
-    return serveStatic(req, res);
+      if (
+        u.pathname ===
+        "/api/predict"
+      ) {
+        res.setHeader(
+          "Content-Type",
+          "application/json; charset=utf-8"
+        );
+
+        try {
+          const symbol = (
+            u.searchParams.get(
+              "symbol"
+            ) || ""
+          )
+            .trim()
+            .toUpperCase();
+
+          if (
+            !/^[A-Z0-9.-]{1,15}$/.test(
+              symbol
+            )
+          ) {
+            throw new Error(
+              "اكتب رمز سهم صحيح مثل TSLA أو AAPL."
+            );
+          }
+
+          const result =
+            await predict(symbol);
+
+          if (res.headersSent)
+            return;
+
+          res.statusCode = 200;
+
+          return res.end(
+            JSON.stringify(
+              result
+            )
+          );
+        } catch (e) {
+          if (res.headersSent)
+            return;
+
+          res.statusCode = 400;
+
+          return res.end(
+            JSON.stringify({
+              error:
+                e &&
+                e.message
+                  ? e.message
+                  : "حدث خطأ غير معروف.",
+            })
+          );
+        }
+      }
+
+      return serveStatic(
+        req,
+        res
+      );
+    }
+  );
+
+server.listen(
+  PORT,
+  () => {
+    console.log(
+      `Sahmak AI web server on port ${PORT}`
+    );
   }
 );
-
-server.listen(PORT, () => {
-  console.log(
-    `Sahmak AI web server on port ${PORT}`
-  );
-});
