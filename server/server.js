@@ -546,6 +546,16 @@ const server =
         `http://${req.headers.host}`
       );
 
+      if (url.pathname === "/robots.txt") {
+        res.writeHead(200, {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-cache"
+        });
+
+        res.end("User-agent: *\nAllow: /\n");
+        return;
+      }
+
       if (
         url.pathname ===
         "/api/health"
